@@ -1,14 +1,7 @@
-/*
- * i2c-lcd.c
- * Source file for I2C LCD driver implementing common LCD functions via I2C.
- */
-
 #include "i2c-lcd.h"
 
-// *** CONFIGURACIÓN ***
-// Dirección I2C de la pantalla. Comúnmente 0x27 o 0x3F. Desplazado 1 bit a la izquierda para HAL.
-// Si es 0x27 -> (0x27 << 1) = 0x4E
-// Si es 0x3F -> (0x3F << 1) = 0x7E
+//CONFIGURACIÓN
+// Dirección I2C de la pantalla. Desplazado 1 bit a la izquierda para HAL.
 #define SLAVE_ADDRESS_LCD (0x27 << 1)
 
 // Variable externa del manejador I2C (definida en main.c)
@@ -64,11 +57,11 @@ void lcd_put_cur(int row, int col)
 void lcd_init(void)
 {
     // Inicialización según hoja de datos para modo 4-bit
-    HAL_Delay(50);  // Esperar >40ms tras encendido
+    HAL_Delay(50);  // Esperar 50 ms tras encendido
     lcd_send_cmd(0x30);
-    HAL_Delay(5);   // Esperar >4.1ms
+    HAL_Delay(5);   // Esperar 5 ms
     lcd_send_cmd(0x30);
-    HAL_Delay(1);   // Esperar >100us
+    HAL_Delay(1);   // Esperar 1 ms
     lcd_send_cmd(0x30);
     HAL_Delay(10);
     lcd_send_cmd(0x20); // Modo 4-bit

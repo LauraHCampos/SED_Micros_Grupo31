@@ -27,6 +27,7 @@
 #include "sound.h"
 #include "i2c-lcd.h"
 #include <stdio.h>
+#include <stdlib.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -57,6 +58,7 @@ SnakeGame_t myGame;
 Snake_t mySnake;
 Food_t myFood;
 extern GameState_t current_state; // Variable de estado definida en fsm.c
+uint8_t game_tick = 0; // Bandera para el ritmo del juego
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -109,13 +111,18 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
-
+  HAL_ADC_Start(&hadc1);
+  if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
+      uint32_t seed = HAL_ADC_GetValue(&hadc1);
+      srand(seed);
+  }
+  HAL_ADC_Stop(&hadc1);
   FSM_Init(&myGame);
   Snake_Init(&mySnake);
   Snake_SpawnFood(&myFood, &mySnake);
-  Sound_Init(&htim3); // Inicializa PWM para el zumbador [cite: 32]
+  Sound_Init(&htim3); // Inicializa PWM para el zumbador
 
-  // Iniciar base de tiempos (TIM2) y ADC [cite: 33]
+  // Iniciar base de tiempos (TIM2) y ADC
   HAL_TIM_Base_Start_IT(&htim2);
 
   /* USER CODE END 2 */
@@ -124,19 +131,29 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  // 1. Leer entradas analógicas (Joystick) [cite: 31, 33]
-	    Leer_Joystick_ADC(&mySnake);
+	  Leer_Joystick_ADC(&mySnake);
 
-	    // 2. Ejecutar lógica de la Máquina de Estados [cite: 38]
-	    FSM_Update(&myGame, &mySnake, &myFood);
+	  if (game_tick == 1) {
+		  // 1. Ejecutamos toda la lógica (Mover, Colisión, Comer, Dibujar)
+		  FSM_Update(&myGame, &mySnake, &myFood);
+		  game_tick = 0; // Reset del tick
+	  }
+	  // Si estamos en Game Over y se pulsa el botón azul (PA0)
+	  if (myGame.currentState == STATE_GAMEOVER) {
+		  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET) {
+			  HAL_Delay(200); // Anti-rebote
+			  FSM_TransitionTo(&myGame, STATE_RESET); // O directo a STATE_IDLE
+		  }
+	  }
 
-	    // 3. Gestión de reinicio (Requisito funcional) [cite: 40]
-	    if (myGame.currentState == STATE_RESET) {
-	        Snake_Init(&mySnake);
-	        FSM_TransitionTo(&myGame, STATE_IDLE);
-	    }
+	  if (myGame.currentState == STATE_RESET) {
+		  // Reiniciamos variables y volvemos al principio
+		  Snake_Init(&mySnake);
+		  myGame.score = 0;
 
-	    HAL_Delay(20); // Estabilidad del sistema
+		  FSM_TransitionTo(&myGame, STATE_IDLE);
+
+	  }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -213,13 +230,13 @@ static void MX_ADC1_Init(void)
   hadc1.Instance = ADC1;
   hadc1.Init.ClockPrescaler = ADC_CLOCK_SYNC_PCLK_DIV4;
   hadc1.Init.Resolution = ADC_RESOLUTION_12B;
-  hadc1.Init.ScanConvMode = DISABLE;
+  hadc1.Init.ScanConvMode = ENABLE;
   hadc1.Init.ContinuousConvMode = DISABLE;
   hadc1.Init.DiscontinuousConvMode = DISABLE;
   hadc1.Init.ExternalTrigConvEdge = ADC_EXTERNALTRIGCONVEDGE_NONE;
   hadc1.Init.ExternalTrigConv = ADC_SOFTWARE_START;
   hadc1.Init.DataAlign = ADC_DATAALIGN_RIGHT;
-  hadc1.Init.NbrOfConversion = 1;
+  hadc1.Init.NbrOfConversion = 2;
   hadc1.Init.DMAContinuousRequests = DISABLE;
   hadc1.Init.EOCSelection = ADC_EOC_SINGLE_CONV;
   if (HAL_ADC_Init(&hadc1) != HAL_OK)
@@ -231,7 +248,16 @@ static void MX_ADC1_Init(void)
   */
   sConfig.Channel = ADC_CHANNEL_1;
   sConfig.Rank = 1;
-  sConfig.SamplingTime = ADC_SAMPLETIME_3CYCLES;
+  sConfig.SamplingTime = ADC_SAMPLETIME_84CYCLES;
+  if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  /** Configure for the selected ADC regular channel its corresponding rank in the sequencer and its sample time.
+  */
+  sConfig.Channel = ADC_CHANNEL_2;
+  sConfig.Rank = 2;
   if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
   {
     Error_Handler();
@@ -413,28 +439,28 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-// Callback del Temporizador: Controla el "paso" de la serpiente [cite: 33]
+// Callback del Temporizador: Controla el paso de la serpiente
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM2) {
         if (myGame.currentState == STATE_PLAYING) {
-            Snake_Move(&mySnake); // Actualiza posición [cite: 93]
 
-            // Detección de colisiones (Muerte) [cite: 102]
             if (Snake_CheckCollision(&mySnake)) {
                 FSM_TransitionTo(&myGame, STATE_GAMEOVER);
             }
 
-            // Detección de comida (Puntuación) [cite: 101]
             if (Snake_EatFood(&mySnake, &myFood)) {
                 myGame.score += 10;
                 Snake_SpawnFood(&myFood, &mySnake);
-                Sound_Play(NOTE_BEEP, 100); // Feedback sonoro rápido [cite: 45]
+                Sound_Play(NOTE_BEEP, 100);
+
             }
+
+            game_tick = 1;
         }
     }
 }
 
-// Callback del Botón Azul (PA0): Inicia el juego [cite: 43]
+// Callback del Botón Azul (PA0): Inicia el juego
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if (GPIO_Pin == GPIO_PIN_0) {
         if (myGame.currentState == STATE_IDLE || myGame.currentState == STATE_GAMEOVER) {
@@ -443,27 +469,49 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     }
 }
 
-// Lectura de los ejes del Joystick mediante ADC [cite: 31, 93]
+// Lectura de los ejes del Joystick mediante ADC
 void Leer_Joystick_ADC(Snake_t *snake) {
-    uint32_t valX, valY;
+    uint32_t adc_val_x;
+    uint32_t adc_val_y;
 
-    // Eje X - Canal 1 (PA1)
+    // 1. Leer valores del ADC (Asegúrate de que tus canales están configurados)
     HAL_ADC_Start(&hadc1);
-    if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
-        valX = HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_PollForConversion(&hadc1, 10);
+    adc_val_x = HAL_ADC_GetValue(&hadc1);
+
+    HAL_ADC_PollForConversion(&hadc1, 10);
+    adc_val_y = HAL_ADC_GetValue(&hadc1);
+    HAL_ADC_Stop(&hadc1);
+
+    // Umbrales para detectar movimiento (Zona muerta entre 1500 y 2500)
+    // Solo cambiamos la dirección si se empuja el joystick al extremo
+
+    // EJE X (Horizontal)
+    if (adc_val_x < 500) { // Joystick a la IZQUIERDA
+        if (snake->direction != DIR_RIGHT) { // Bloqueo de 180°
+            snake->direction = DIR_LEFT;
+        }
+    }
+    else if (adc_val_x > 3500) { // Joystick a la DERECHA
+        if (snake->direction != DIR_LEFT) {
+            snake->direction = DIR_RIGHT;
+        }
     }
 
-    // Eje Y - Canal 2 (PA2)
-    HAL_ADC_Start(&hadc1);
-    if(HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
-        valY = HAL_ADC_GetValue(&hadc1);
+    // EJE Y (Vertical)
+    if (adc_val_y < 500) { // Joystick ARRIBA
+        if (snake->direction != DIR_DOWN) {
+            snake->direction = DIR_UP;
+        }
+    }
+    else if (adc_val_y > 3500) { // Joystick ABAJO
+        if (snake->direction != DIR_UP) {
+            snake->direction = DIR_DOWN;
+        }
     }
 
-    // Traducir valores ADC a direcciones (Evitando giros de 180º)
-    if (valX < 1000 && snake->direction != DIR_RIGHT) snake->direction = DIR_LEFT;
-    else if (valX > 3000 && snake->direction != DIR_LEFT) snake->direction = DIR_RIGHT;
-    else if (valY < 1000 && snake->direction != DIR_DOWN) snake->direction = DIR_UP;
-    else if (valY > 3000 && snake->direction != DIR_UP) snake->direction = DIR_DOWN;
+    // Si los valores están en el centro (ej. 2048),
+    // no entramos en ningún IF y snake->direction conserva su valor previo.
 }
 /* USER CODE END 4 */
 

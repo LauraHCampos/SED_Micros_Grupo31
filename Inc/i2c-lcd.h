@@ -1,12 +1,7 @@
-/*
- * i2c-lcd.h
- * Header file for I2C LCD driver
- */
-
 #ifndef INC_I2C_LCD_H_
 #define INC_I2C_LCD_H_
 
-#include "stm32f4xx_hal.h" // Asegúrate de que esto coincide con tu familia de micro (F4)
+#include "stm32f4xx_hal.h" 
 
 // Comandos comunes de la LCD
 #define LCD_CLEARDISPLAY 0x01
@@ -52,4 +47,4 @@ void lcd_send_string(char *str);  // send string to the lcd
 void lcd_put_cur(int row, int col);  // put cursor at the entered position row (0 or 1), col (0-15)
 void lcd_clear(void); // clear display
 
-#endif /* INC_I2C_LCD_H_ */
+#endif
