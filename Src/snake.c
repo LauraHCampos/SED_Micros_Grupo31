@@ -12,7 +12,7 @@ void Snake_Init(Snake_t *snake) {
     snake->direction = DIR_RIGHT;
 }
 
-// Mueve la serpiente actualizando cada segmento del cuerpo
+// Mueve la serpiente actualizando cada segmento del cuerpo [cite: 91, 93]
 void Snake_Move(Snake_t *snake) {
     // 1. Guardamos la posición que tiene la cola actualmente
     uint8_t tail_x = snake->body[snake->length - 1].x;
@@ -40,7 +40,7 @@ void Snake_Move(Snake_t *snake) {
     }
 }
 
-// Genera comida en una posición aleatoria
+// Genera comida en una posición aleatoria [cite: 91]
 void Snake_SpawnFood(Food_t *food, Snake_t *snake) {
     int valid = 0;
 
@@ -60,7 +60,7 @@ void Snake_SpawnFood(Food_t *food, Snake_t *snake) {
     }
 }
 
-// Comprueba si la serpiente ha chocado (Condición de derrota)
+// Comprueba si la serpiente ha chocado (Condición de derrota) [cite: 39, 92, 102]
 uint8_t Snake_CheckCollision(Snake_t *snake) {
     int headX = snake->body[0].x;
     int headY = snake->body[0].y;
@@ -80,7 +80,7 @@ uint8_t Snake_CheckCollision(Snake_t *snake) {
     return 0;
 }
 
-// Comprueba si la cabeza alcanza la comida para aumentar longitud y puntos
+// Comprueba si la cabeza alcanza la comida para aumentar longitud y puntos [cite: 91, 101]
 uint8_t Snake_EatFood(Snake_t *snake, Food_t *food) {
     if (snake->body[0].x == food->position.x && snake->body[0].y == food->position.y) {
         // En lugar de crecer aquí, anotamos que tenemos un crecimiento pendiente

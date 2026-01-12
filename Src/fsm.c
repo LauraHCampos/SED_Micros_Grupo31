@@ -5,14 +5,14 @@
 // Variables que vienen de main.c
 extern I2C_HandleTypeDef hi2c1;
 extern TIM_HandleTypeDef htim2;
-
-//Inicializa el estado del juego y los periféricos
-
+/**
+ * Inicializa el estado del juego y los periféricos [cite: 19]
+ */
 void FSM_Init(SnakeGame_t *game) {
     game->currentState = STATE_IDLE;
     game->score = 0;
 
-    // Apagar actuadores visuales
+    // Apagar actuadores visuales [cite: 32]
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_12, GPIO_PIN_RESET); // Verde
     HAL_GPIO_WritePin(GPIOD, GPIO_PIN_14, GPIO_PIN_RESET); // Rojo
 
@@ -20,9 +20,9 @@ void FSM_Init(SnakeGame_t *game) {
     Display_Init(&hi2c1);
 }
 
-
-//Gestiona las transiciones entre estados y acciones únicas
-
+/**
+ * Gestiona las transiciones entre estados y acciones únicas
+ */
 void FSM_TransitionTo(SnakeGame_t *game, GameState_t newState) {
     game->currentState = newState;
 
@@ -53,9 +53,9 @@ void FSM_TransitionTo(SnakeGame_t *game, GameState_t newState) {
     }
 }
 
-
-//Ciclo de ejecución de la FSM (se llama en el while del main)
-
+/**
+ * Ciclo de ejecución de la FSM (se llama en el while del main)
+ */
 void FSM_Update(SnakeGame_t *game, Snake_t *snake, Food_t *food) {
     switch (game->currentState) {
         case STATE_IDLE:
