@@ -8,11 +8,11 @@ void Snake_Init(Snake_t *snake) {
     snake->body[0].x = 7;
     snake->body[0].y = 0;
 
-    // IMPORTANTE: Empezar moviéndose a la derecha para no chocar con bordes X o Y
+    // Empezar moviéndose a la derecha para no chocar con bordes X o Y
     snake->direction = DIR_RIGHT;
 }
 
-// Mueve la serpiente actualizando cada segmento del cuerpo [cite: 91, 93]
+// Mueve la serpiente actualizando cada segmento del cuerpo
 void Snake_Move(Snake_t *snake) {
     // 1. Guardamos la posición que tiene la cola actualmente
     uint8_t tail_x = snake->body[snake->length - 1].x;
@@ -40,7 +40,7 @@ void Snake_Move(Snake_t *snake) {
     }
 }
 
-// Genera comida en una posición aleatoria [cite: 91]
+// Genera comida en una posición aleatoria
 void Snake_SpawnFood(Food_t *food, Snake_t *snake) {
     int valid = 0;
 
@@ -49,7 +49,7 @@ void Snake_SpawnFood(Food_t *food, Snake_t *snake) {
         food->position.x = rand() % 16;
         food->position.y = rand() % 2;
 
-        // Opcional: Verificar que la comida no aparezca encima del cuerpo de la serpiente
+        // Verificar que la comida no aparezca encima del cuerpo de la serpiente
         valid = 1;
         for (int i = 0; i < snake->length; i++) {
             if (food->position.x == snake->body[i].x && food->position.y == snake->body[i].y) {
@@ -60,7 +60,7 @@ void Snake_SpawnFood(Food_t *food, Snake_t *snake) {
     }
 }
 
-// Comprueba si la serpiente ha chocado (Condición de derrota) [cite: 39, 92, 102]
+// Comprueba si la serpiente ha chocado (Condición de derrota)
 uint8_t Snake_CheckCollision(Snake_t *snake) {
     int headX = snake->body[0].x;
     int headY = snake->body[0].y;
@@ -80,7 +80,7 @@ uint8_t Snake_CheckCollision(Snake_t *snake) {
     return 0;
 }
 
-// Comprueba si la cabeza alcanza la comida para aumentar longitud y puntos [cite: 91, 101]
+// Comprueba si la cabeza alcanza la comida para aumentar longitud y puntos
 uint8_t Snake_EatFood(Snake_t *snake, Food_t *food) {
     if (snake->body[0].x == food->position.x && snake->body[0].y == food->position.y) {
         // En lugar de crecer aquí, anotamos que tenemos un crecimiento pendiente

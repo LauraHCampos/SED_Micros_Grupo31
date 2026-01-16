@@ -54,6 +54,9 @@ TIM_HandleTypeDef htim2;
 TIM_HandleTypeDef htim3;
 
 /* USER CODE BEGIN PV */
+uint32_t high_score = 0; // Esta variable guardará el récord de la sesión
+uint32_t last_score = 0;
+uint8_t new_record_flag = 0;  // Se activa solo cuando superas el high_score
 SnakeGame_t myGame;
 Snake_t mySnake;
 Food_t myFood;
@@ -112,18 +115,23 @@ int main(void)
   MX_TIM2_Init();
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
+  // 1. Inicialización del LCD (Hardware y mensaje "INSERT COIN")
+  Display_Init(&hi2c1);
+
   HAL_ADC_Start(&hadc1);
+
   if (HAL_ADC_PollForConversion(&hadc1, 10) == HAL_OK) {
       uint32_t seed = HAL_ADC_GetValue(&hadc1);
       srand(seed);
   }
+
   HAL_ADC_Stop(&hadc1);
   FSM_Init(&myGame);
   Snake_Init(&mySnake);
   Snake_SpawnFood(&myFood, &mySnake);
-  Sound_Init(&htim3); // Inicializa PWM para el zumbador [cite: 32]
+  Sound_Init(&htim3); // Inicializa PWM para el zumbador
 
-  // Iniciar base de tiempos (TIM2) y ADC [cite: 33]
+  // Iniciar base de tiempos (TIM2) y ADC
   HAL_TIM_Base_Start_IT(&htim2);
 
   /* USER CODE END 2 */
@@ -132,53 +140,57 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   uint32_t last_score = 0; // Para detectar cuándo aumenta el score
   while (1)
-  {
-	  Leer_Joystick_ADC(&mySnake);
+    {
+        Leer_Joystick_ADC(&mySnake);
 
-	  if (game_tick == 1) {
-		  // 1. Ejecutamos toda la lógica (Mover, Colisión, Comer, Dibujar)
-		  FSM_Update(&myGame, &mySnake, &myFood);
+        if (game_tick == 1) {
+            FSM_Update(&myGame, &mySnake, &myFood);
 
-		  // 2. ¿Ha aumentado la puntuación en este tick?
-		  if (myGame.score > last_score) {
-			  last_score = myGame.score;
+            // Sonido de comida: Solo si el score sube
+            if (myGame.score > last_score) {
+                Sound_Play(NOTE_BEEP, 80);
+                last_score = myGame.score;
 
-			  // 3. Aceleramos el juego
-			  // Tu periodo inicial es 5000. Bajamos de 200 en 200.
-			  if (current_period > 1000) {
-				  current_period -= 200;
-				  __HAL_TIM_SET_AUTORELOAD(&htim2, current_period);
-			  }
-		  }
+                if (myGame.score > high_score) {
+					high_score = myGame.score;
+					new_record_flag = 1; //Activamos el aviso de celebración
+				}
 
-		  game_tick = 0; // Reset del tick
-	  }
+                if (current_period > 1000) {
+                    current_period -= 200;
+                    __HAL_TIM_SET_AUTORELOAD(&htim2, current_period);
+                }
+            }
+            game_tick = 0;
+        }
 
-	  // Si estamos en Game Over y se pulsa el botón azul (PA0)
-	  if (myGame.currentState == STATE_GAMEOVER) {
-		  if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET) {
-			  HAL_Delay(200); // Anti-rebote
-			  FSM_TransitionTo(&myGame, STATE_RESET); // O directo a STATE_IDLE
-		  }
-	  }
+        // GESTIÓN DE GAME OVER: Esperar al botón
+        if (myGame.currentState == STATE_GAMEOVER) {
+            if (HAL_GPIO_ReadPin(GPIOA, GPIO_PIN_0) == GPIO_PIN_SET) {
+                HAL_Delay(200);
+                // Al hacer esta transición, se disparará Display_Reset
+                FSM_TransitionTo(&myGame, STATE_RESET);
+            }
+        }
 
-	  if (myGame.currentState == STATE_RESET) {
-		  // Reiniciamos variables y volvemos al principio
-		  Snake_Init(&mySnake);
-		  myGame.score = 0;
-		  last_score = 0;
+        // GESTIÓN DE RESET: La pausa de 5 segundos
+        if (myGame.currentState == STATE_RESET) {
 
-		  // REINICIAR VELOCIDAD
-		  current_period = 5000;
-		  __HAL_TIM_SET_AUTORELOAD(&htim2, current_period);
+            // 1. EL JUEGO SE DETIENE AQUÍ 5 SEGUNDOS
+            // El usuario está viendo la pantalla que puso FSM_TransitionTo
+            HAL_Delay(5000);
 
-		  FSM_TransitionTo(&myGame, STATE_IDLE);
+            // 2. Ahora que pasaron los 5 seg, reiniciamos la lógica
+            Snake_Init(&mySnake);
+            myGame.score = 0;
+            last_score = 0;
+            current_period = 5000;
+            __HAL_TIM_SET_AUTORELOAD(&htim2, current_period);
 
-	  }
-    /* USER CODE END WHILE */
-
-    /* USER CODE BEGIN 3 */
-  }
+            // 3. Volvemos al estado de espera
+            FSM_TransitionTo(&myGame, STATE_IDLE);
+        }
+    }
   /* USER CODE END 3 */
 }
 
@@ -460,37 +472,28 @@ static void MX_GPIO_Init(void)
 }
 
 /* USER CODE BEGIN 4 */
-// Callback del Temporizador: Controla el "paso" de la serpiente [cite: 33]
+// Callback del Temporizador: Controla el paso de la serpiente
 void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     if (htim->Instance == TIM2) {
+        // Solo damos el permiso de mover si estamos jugando
         if (myGame.currentState == STATE_PLAYING) {
-
-            if (Snake_CheckCollision(&mySnake)) {
-                FSM_TransitionTo(&myGame, STATE_GAMEOVER);
-            }
-
-            if (Snake_EatFood(&mySnake, &myFood)) {
-                myGame.score += 10;
-                Snake_SpawnFood(&myFood, &mySnake);
-                Sound_Play(NOTE_BEEP, 100);
-
-            }
-
             game_tick = 1;
         }
     }
 }
 
-// Callback del Botón Azul (PA0): Inicia el juego [cite: 43]
+// Callback del Botón Azul (PA0): Inicia el juego
 void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
     if (GPIO_Pin == GPIO_PIN_0) {
-        if (myGame.currentState == STATE_IDLE || myGame.currentState == STATE_GAMEOVER) {
+        // Solo permitimos el inicio desde IDLE aquí.
+        // El resto lo gestionamos en el main.
+        if (myGame.currentState == STATE_IDLE) {
             FSM_TransitionTo(&myGame, STATE_PLAYING);
         }
     }
 }
 
-// Lectura de los ejes del Joystick mediante ADC [cite: 31, 93]
+// Lectura de los ejes del Joystick mediante ADC
 void Leer_Joystick_ADC(Snake_t *snake) {
     uint32_t adc_val_x;
     uint32_t adc_val_y;
@@ -531,7 +534,7 @@ void Leer_Joystick_ADC(Snake_t *snake) {
         }
     }
 
-    // NOTA: Si los valores están en el centro (ej. 2048),
+    // Si los valores están en el centro (ej. 2048),
     // no entramos en ningún IF y snake->direction conserva su valor previo.
 }
 /* USER CODE END 4 */
